@@ -22,6 +22,7 @@
     --logo-pad:#ffffff;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  button{font-family:inherit; color:inherit;}
   html,body{margin:0; height:100%;}
   body{
     background:var(--bg); color:var(--ink);
@@ -66,7 +67,7 @@
   /* 섹션 선택 */
   .resume{
     background:var(--card); border:2px solid var(--accent); border-radius:16px;
-    padding:16px; margin-bottom:20px; display:flex; align-items:center; gap:14px;
+    padding:16px; margin-bottom:20px; display:flex; align-items:center; gap:14px; color:var(--ink);
   }
   .resume .txt{flex:1;}
   .resume .t1{font-weight:700; font-size:16px;}
@@ -75,11 +76,12 @@
   .seclist{display:grid; gap:12px;}
   .seccard{
     border:2px solid var(--line); border-radius:16px; background:var(--card);
-    padding:16px 18px; cursor:pointer; text-align:left;
+    padding:16px 18px; cursor:pointer; text-align:left; color:var(--ink);
+    font-family:inherit;
   }
   .seccard:active{transform:scale(.99);}
   .sechead{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px;}
-  .secname{font-size:17px; font-weight:700;}
+  .secname{font-size:17px; font-weight:700; color:var(--ink);}
   .secnum{font-size:14px; color:var(--sub); font-variant-numeric:tabular-nums;}
   .secbar{height:8px; background:var(--line); border-radius:99px; overflow:hidden;}
   .secbar i{display:block; height:100%; background:var(--accent); width:0; transition:width .3s;}
@@ -257,6 +259,13 @@ function jset(k,v){ try{localStorage.setItem(k, JSON.stringify(v));}catch(e){} }
 function loadProfiles(){ return jget(K_PROFILES, []); }
 function saveProfiles(arr){ jset(K_PROFILES, arr); }
 
+/* 기기 고유 코드 (최초 1회 생성·보관 → speakerId 전역 유일 보장) */
+function deviceId(){
+  let d = localStorage.getItem('l2u_device');
+  if(!d){ d = Math.random().toString(36).slice(2,8); localStorage.setItem('l2u_device', d); }
+  return d;
+}
+
 /* 현재 프로필 진행률·위치 저장 */
 function persist(){
   if(curPid==null) return;
@@ -311,7 +320,7 @@ document.querySelectorAll('#pgMeta .opts').forEach(grp=>{
 document.getElementById('toSections').addEventListener('click',()=>{
   const profiles = loadProfiles();
   const pid = (profiles.reduce((m,p)=>Math.max(m,p.pid),0) || 0) + 1;
-  speakerId = `${meta.regionCode}_${meta.sex}_${meta.birthYear}_${pid}`;
+  speakerId = `${deviceId()}_${pid}_${meta.regionCode}_${meta.sex}_${meta.birthYear}`;
   profiles.push({pid, regionCode:meta.regionCode, region:meta.region, sex:meta.sex, birthYear:meta.birthYear, speakerId});
   saveProfiles(profiles);
   curPid = pid;
@@ -339,7 +348,7 @@ function showHub(){
     const card=document.createElement('button');
     card.className='seccard';
     card.innerHTML=`<div class="sechead">
-        <span class="secname">${REGION_NAME[p.regionCode]} · ${p.sex} · ${p.birthYear}년생</span>
+        <span class="secname">화자 ${p.pid} · ${REGION_NAME[p.regionCode]} · ${p.sex} · ${p.birthYear}년생</span>
         <span class="secnum">${cnt} / ${SCRIPT.length}</span></div>`;
     card.addEventListener('click',()=>openProfile(p));
     list.appendChild(card);
