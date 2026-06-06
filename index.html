@@ -334,35 +334,76 @@ document.getElementById('next').addEventListener('click',()=>{
 });
 document.getElementById('toSecFromRec').addEventListener('click',()=>{ persist(); uploadPending(); showSections(); });
 
-/* ════ 녹음 (Web Audio → WAV) ════ */
-let audioCtx,stream,src,proc,recording=false,chunks=[],sr=44100,tStart=0,tInt;
+/* ════ 녹음 (Web Audio → WAV, iOS Safari 대응) ════
+   - AudioContext/스트림은 첫 녹음 때 한 번만 생성해 재사용
+   - iOS는 사용자 탭 안에서 ctx.resume() + getUserMedia를 해야 마이크가 묵음이 안 됨
+   - raw PCM → WAV(무손실). 안드·iOS 동일 경로(품질 동일).                 */
+let audioCtx=null, stream=null, src=null, proc=null;
+let recording=false, chunks=[], sr=44100, tStart=0, tInt;
+let micReady=false;
+
+async function ensureMic(){
+  if(micReady) return true;
+  // AudioContext: iOS는 webkit 접두 + 탭 안에서 생성/resume 해야 함
+  audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended'){ try{ await audioCtx.resume(); }catch(e){} }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({audio:{
+      noiseSuppression:false, echoCancellation:false, autoGainControl:false,
+      channelCount:1
+    }});
+  }catch(e){
+    alert('마이크 권한이 필요합니다. 사파리 주소창 왼쪽 「ㄱㄱ」 → 마이크 허용 후 다시 시도해 주세요.');
+    return false;
+  }
+  sr = audioCtx.sampleRate;                  // iOS는 기기값(보통 48000) 사용
+  src = audioCtx.createMediaStreamSource(stream);
+  proc = audioCtx.createScriptProcessor(4096,1,1);
+  proc.onaudioprocess = e=>{
+    if(!recording) return;
+    chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+  };
+  src.connect(proc);
+  proc.connect(audioCtx.destination);        // iOS는 destination 연결돼야 onaudioprocess 발화
+  micReady=true;
+  return true;
+}
+
 async function startRec(){
-  try{ stream=await navigator.mediaDevices.getUserMedia({audio:{noiseSuppression:false,echoCancellation:false,autoGainControl:false}}); }
-  catch(e){ alert('마이크 권한이 필요합니다.'); return; }
-  audioCtx=new (window.AudioContext||window.webkitAudioContext)(); sr=audioCtx.sampleRate;
-  src=audioCtx.createMediaStreamSource(stream);
-  proc=audioCtx.createScriptProcessor(4096,1,1);  // 실배포: AudioWorklet 권장
+  // ★ 반드시 탭 핸들러 동기 흐름 안에서 resume + 마이크 확보 (iOS 필수)
+  if(audioCtx && audioCtx.state==='suspended'){ try{ await audioCtx.resume(); }catch(e){} }
+  const ok = await ensureMic();
+  if(!ok) return;
+  if(audioCtx.state==='suspended'){ try{ await audioCtx.resume(); }catch(e){} }
   chunks=[];
-  proc.onaudioprocess=e=>{ if(recording) chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
-  src.connect(proc); proc.connect(audioCtx.destination);
   recording=true; tStart=Date.now();
   tInt=setInterval(()=>document.getElementById('timer').textContent=((Date.now()-tStart)/1000).toFixed(1)+'초',100);
-  const b=document.getElementById('recbtn'); b.classList.add('recording'); document.getElementById('reclabel').textContent='정지';
+  const b=document.getElementById('recbtn'); b.classList.add('recording'); document.getElementById('reclabel').textContent='■ 정지';
 }
+
 function stopRec(){
   recording=false; clearInterval(tInt);
-  try{proc.disconnect();src.disconnect();stream.getTracks().forEach(t=>t.stop());audioCtx.close();}catch(e){}
-  const blob=encodeWAV(flatten(chunks),sr); const it=secItems(curSec)[idx];
+  // context/stream은 닫지 않고 재사용 (다음 문장 녹음 빠르게, iOS 재요청 방지)
+  const flat = flatten(chunks);
+  if(flat.length===0){
+    resetRecBtn();
+    document.getElementById('saved').textContent='⚠ 소리가 녹음되지 않았어요. 다시 시도해 주세요.';
+    return;
+  }
+  const blob=encodeWAV(flat,sr); const it=secItems(curSec)[idx];
   if(takes[it.id]) URL.revokeObjectURL(takes[it.id].url);
   takes[it.id]={blob,url:URL.createObjectURL(blob)};
   resetRecBtn();
   document.getElementById('play').disabled=false; document.getElementById('redo').disabled=false;
   document.getElementById('saved').textContent='✓ 녹음됨';
-  persist();                        // 녹음 즉시 진행률 저장
+  persist();
 }
 function resetRecBtn(){ const b=document.getElementById('recbtn'); b.classList.remove('recording'); document.getElementById('reclabel').textContent='녹음'; }
 document.getElementById('recbtn').addEventListener('click',()=> recording?stopRec():startRec());
-document.getElementById('play').addEventListener('click',()=>{ const t=takes[secItems(curSec)[idx].id]; if(t) new Audio(t.url).play(); });
+document.getElementById('play').addEventListener('click',()=>{
+  const t=takes[secItems(curSec)[idx].id];
+  if(t){ const a=new Audio(t.url); a.play().catch(()=>alert('재생할 수 없습니다.')); }
+});
 document.getElementById('redo').addEventListener('click',()=>{ const it=secItems(curSec)[idx]; if(takes[it.id]){URL.revokeObjectURL(takes[it.id].url); delete takes[it.id];} render(); });
 
 /* WAV 인코딩 */
