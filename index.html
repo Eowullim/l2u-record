@@ -6,10 +6,20 @@
 <title>말해U 수집</title>
 <style>
   :root{
-    --bg:#f4f1ea; --ink:#1c1a17; --sub:#6b6356;
-    --line:#d8d2c4; --card:#fffdf8;
-    --jn:#0b6b5e; --jb:#9a5b1f; --accent:#0b6b5e;
-    --rec:#c0392b; --rec-on:#e74c3c; --go:#1c1a17;
+    /* 라이트(낮) — 현행 톤 유지, 글씨·테두리만 더 또렷하게 */
+    --bg:#f4f1ea; --ink:#15130f; --sub:#5c5446;
+    --line:#cbc4b2; --card:#fffdf8;
+    --jn:#0a5f53; --jb:#8a4f17; --accent:#0a5f53;
+    --rec:#b5311f; --rec-on:#e0402c; --go:#15130f;
+    --logo-pad:#ffffff;
+  }
+  body[data-theme="dark"]{
+    /* 밤 — 풀블랙 대신 짙은 회갈색, 밝은 글씨(적당 고대비, 눈부심 억제) */
+    --bg:#1e1c19; --ink:#f2efe8; --sub:#b3ac9e;
+    --line:#403b34; --card:#2a2723;
+    --jn:#4fc4b2; --jb:#e0a766; --accent:#4fc4b2;
+    --rec:#e0533f; --rec-on:#f06a55; --go:#3a352f;
+    --logo-pad:#ffffff;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0; height:100%;}
@@ -25,6 +35,10 @@
 
   h1{font-size:25px; margin:6px 0 4px; letter-spacing:-.5px;}
   .lead{color:var(--sub); margin:0 0 22px; font-size:15px;}
+  /* 로고 */
+  .logo-hero{display:flex; flex-direction:column; align-items:center; gap:10px; margin:4px 0 18px;}
+  .logo-hero img{width:96px; height:96px; border-radius:22px; background:var(--logo-pad); padding:6px; box-shadow:0 2px 10px rgba(0,0,0,.12);}
+  .logo-mini{width:38px; height:38px; border-radius:10px; background:var(--logo-pad); padding:3px; flex:none;}
 
   /* 메타 */
   .field{margin-bottom:20px;}
@@ -106,9 +120,17 @@
 </head>
 <body>
 
+<!-- 0. 프로필 허브 -->
+<section class="page on" id="pgHub"><div class="wrap">
+  <div class="logo-hero"><img src="l2u_logo.png" alt="말해U"><h1 style="margin:0;">말해U 발화 수집</h1></div>
+  <p class="lead">녹음하실 분을 고르거나, 새로 추가하세요.</p>
+  <div class="seclist" id="profileList"></div>
+  <button class="bigbtn" id="addProfile" style="margin-top:18px;">＋ 새 화자 추가</button>
+</div></section>
+
 <!-- 1. 메타 -->
-<section class="page on" id="pgMeta"><div class="wrap">
-  <h1>말해U 발화 수집</h1>
+<section class="page" id="pgMeta"><div class="wrap">
+  <div class="logo-hero"><img src="l2u_logo.png" alt="말해U"><h1 style="margin:0;">말해U 발화 수집</h1></div>
   <p class="lead">화자 정보를 한 번만 입력해 주세요.</p>
 
   <div class="field"><label>출생지역</label>
@@ -150,12 +172,13 @@
   <p class="lead" id="secLead"></p>
   <div id="resumeBox"></div>
   <div class="seclist" id="seclist"></div>
-  <button class="backbtn" id="resetMeta" style="margin-top:18px;">화자 정보 다시 고르기</button>
+  <button class="backbtn" id="toHub" style="margin-top:18px;">← 화자 선택으로</button>
 </div></section>
 
 <!-- 3. 녹음 -->
 <section class="page" id="pgRec">
   <div class="topbar">
+    <img src="l2u_logo.png" alt="" class="logo-mini">
     <span class="who" id="who"></span>
     <span id="secName"></span>
     <div class="prog"><i id="progbar"></i></div>
@@ -184,6 +207,15 @@
 </section>
 
 <script>
+/* ════ 테마: 시간대 자동 (밤 19시~07시 다크) ════ */
+function applyAutoTheme(){
+  const h=new Date().getHours();
+  const dark = (h>=19 || h<7);
+  document.body.setAttribute('data-theme', dark?'dark':'light');
+}
+applyAutoTheme();
+setInterval(applyAutoTheme, 10*60*1000);   // 10분마다 시간대 재확인(경계 넘어가면 자동 전환)
+
 /* ════ 대본 데이터 ════
    같은 레포의 script.tsv 에서 로드 (id,sec,std,jn,jb).
    대본 수정 시 script.tsv만 다시 올리면 됨 — HTML 불변.            */
@@ -207,28 +239,35 @@ async function loadScript(){
 /* ════ 상태 / 저장 ════ */
 let meta = {regionCode:null, region:null, sex:null, birthYear:null};
 let speakerId = null;
+let curPid = null;                      // 현재 프로필 일련번호
 let curSec = null, idx = 0;
 const takes = {};                       // id -> {blob,url}  (오디오는 메모리; 진행률만 영속)
-const STORE_KEY = 'l2u_progress_v1';
 const REGION_NAME = {'061':'광주','062':'전남','063':'전북'};
+const K_PROFILES = 'l2u_profiles_v1';   // 프로필 목록
+const kDone = pid => `l2u_done_${pid}`; // 프로필별 진행률
+const kLast = pid => `l2u_last_${pid}`; // 프로필별 마지막 위치
+
 /* 방언 예시 선택: 광주·전남 → 전남 예시 / 전북 → 전북 예시 */
 function dialectOf(it){ return meta.regionCode==='063' ? it.jb : it.jn; }
 function regionLabel(){ return REGION_NAME[meta.regionCode]||''; }
 
-function loadStore(){ try{return JSON.parse(localStorage.getItem(STORE_KEY))||{};}catch(e){return {};} }
-function saveStore(obj){ try{localStorage.setItem(STORE_KEY, JSON.stringify(obj));}catch(e){} }
+function jget(k,def){ try{const v=localStorage.getItem(k); return v==null?def:JSON.parse(v);}catch(e){return def;} }
+function jset(k,v){ try{localStorage.setItem(k, JSON.stringify(v));}catch(e){} }
 
+function loadProfiles(){ return jget(K_PROFILES, []); }
+function saveProfiles(arr){ jset(K_PROFILES, arr); }
+
+/* 현재 프로필 진행률·위치 저장 */
 function persist(){
-  const s = loadStore();
-  s.speakerId = speakerId; s.meta = meta;
-  s.done = s.done || {};
-  Object.keys(takes).forEach(id=> s.done[id]=true);
-  s.lastSec = curSec; s.lastIdx = idx;
-  saveStore(s);
+  if(curPid==null) return;
+  const done = jget(kDone(curPid), {});
+  Object.keys(takes).forEach(id=> done[id]=true);
+  jset(kDone(curPid), done);
+  jset(kLast(curPid), {sec:curSec, idx});
 }
+function doneMap(){ return curPid!=null ? jget(kDone(curPid), {}) : {}; }
 
 /* ════ 메타 입력 ════ */
-// 생년 드롭다운 채우기 (보조 — 고르면 인풋에 채워짐)
 (function fillYears(){
   const sel=document.getElementById('selYear');
   const now=new Date().getFullYear();
@@ -246,9 +285,17 @@ function refreshMeta(){
   const ok = meta.regionCode && meta.sex && meta.birthYear && document.getElementById('agree').checked;
   document.getElementById('toSections').disabled = !ok;
 }
+function clearMetaForm(){
+  meta = {regionCode:null, region:null, sex:null, birthYear:null};
+  document.querySelectorAll('#pgMeta .opt').forEach(x=>x.setAttribute('aria-pressed','false'));
+  document.getElementById('inYear').value='';
+  document.getElementById('selYear').value='';
+  document.getElementById('agree').checked=false;
+  document.getElementById('toSections').disabled=true;
+}
 document.getElementById('selYear').addEventListener('change',()=>{
   const v=document.getElementById('selYear').value;
-  if(v) document.getElementById('inYear').value=v;   // 드롭다운 선택 → 인풋에 반영
+  if(v) document.getElementById('inYear').value=v;
   refreshMeta();
 });
 document.getElementById('inYear').addEventListener('input',refreshMeta);
@@ -259,29 +306,68 @@ document.querySelectorAll('#pgMeta .opts').forEach(grp=>{
     o.setAttribute('aria-pressed','true'); meta[grp.dataset.key]=o.dataset.v; refreshMeta();
   }));
 });
-document.getElementById('toSections').addEventListener('click',()=>{
-  speakerId = `${meta.regionCode}_${meta.sex}_${meta.birthYear}_${Date.now().toString(36)}`;
-  persist(); showSections();
-});
-document.getElementById('resetMeta').addEventListener('click',()=>{ go('pgMeta'); });
 
-/* ════ 섹션 선택 ════ */
+/* 메타 "다음" → 새 프로필 생성 후 섹션으로 */
+document.getElementById('toSections').addEventListener('click',()=>{
+  const profiles = loadProfiles();
+  const pid = (profiles.reduce((m,p)=>Math.max(m,p.pid),0) || 0) + 1;
+  speakerId = `${meta.regionCode}_${meta.sex}_${meta.birthYear}_${pid}`;
+  profiles.push({pid, regionCode:meta.regionCode, region:meta.region, sex:meta.sex, birthYear:meta.birthYear, speakerId});
+  saveProfiles(profiles);
+  curPid = pid;
+  Object.keys(takes).forEach(k=>delete takes[k]);
+  showSections();
+});
+
+/* 허브 / 프로필 진입 */
+document.getElementById('addProfile').addEventListener('click',()=>{ clearMetaForm(); go('pgMeta'); });
+document.getElementById('toHub').addEventListener('click',()=>{ persist(); uploadPending(); showHub(); });
+
+/* ════ 화면 전환 ════ */
 function go(id){ document.querySelectorAll('.page').forEach(p=>p.classList.remove('on')); document.getElementById(id).classList.add('on'); }
 
+/* ════ 프로필 허브 ════ */
+function profDoneCount(pid){ return Object.keys(jget(kDone(pid),{})).length; }
+function showHub(){
+  const list=document.getElementById('profileList'); list.innerHTML='';
+  const profiles=loadProfiles();
+  if(profiles.length===0){
+    list.innerHTML='<p class="lead" style="text-align:center;padding:20px 0;">아직 등록된 화자가 없어요.<br>아래 버튼으로 추가하세요.</p>';
+  }
+  profiles.forEach(p=>{
+    const cnt=profDoneCount(p.pid);
+    const card=document.createElement('button');
+    card.className='seccard';
+    card.innerHTML=`<div class="sechead">
+        <span class="secname">${REGION_NAME[p.regionCode]} · ${p.sex} · ${p.birthYear}년생</span>
+        <span class="secnum">${cnt} / ${SCRIPT.length}</span></div>`;
+    card.addEventListener('click',()=>openProfile(p));
+    list.appendChild(card);
+  });
+  go('pgHub');
+}
+function openProfile(p){
+  curPid=p.pid; speakerId=p.speakerId;
+  meta={regionCode:p.regionCode, region:p.region, sex:p.sex, birthYear:p.birthYear};
+  Object.keys(takes).forEach(k=>delete takes[k]);
+  showSections();
+}
+
+/* ════ 섹션 선택 ════ */
 function secItems(sec){ return SCRIPT.filter(x=>x.sec===sec); }
-function secDone(sec){ const s=loadStore().done||{}; return secItems(sec).filter(x=>s[x.id]).length; }
+function secDone(sec){ const s=doneMap(); return secItems(sec).filter(x=>s[x.id]).length; }
 
 function showSections(){
   document.getElementById('secLead').textContent = `${regionLabel()} · ${meta.sex} · ${meta.birthYear}년생 — 섹션을 고르세요.`;
   // 이어하기
-  const st = loadStore();
+  const st = jget(kLast(curPid), null);
   const box = document.getElementById('resumeBox'); box.innerHTML='';
-  if(st.lastSec && secItems(st.lastSec).length){
+  if(st && st.sec && secItems(st.sec).length){
     box.innerHTML = `<div class="resume"><div class="txt">
       <div class="t1">이어하기</div>
-      <div class="t2">${st.lastSec} · ${ (st.lastIdx||0)+1 }번째부터</div>
+      <div class="t2">${st.sec} · ${ (st.idx||0)+1 }번째부터</div>
       </div><button id="resumeBtn">계속</button></div>`;
-    document.getElementById('resumeBtn').addEventListener('click',()=>{ openSec(st.lastSec, st.lastIdx||0); });
+    document.getElementById('resumeBtn').addEventListener('click',()=>{ openSec(st.sec, st.idx||0); });
   }
   // 섹션 카드
   const list = document.getElementById('seclist'); list.innerHTML='';
@@ -316,7 +402,7 @@ function render(){
   document.getElementById('dialect').textContent = dialectOf(it);
   document.getElementById('count').textContent=`${idx+1}/${items.length}`;
   document.getElementById('progbar').style.width=((idx+1)/items.length*100)+'%';
-  const has=!!takes[it.id] || (loadStore().done||{})[it.id];
+  const has=!!takes[it.id] || !!doneMap()[it.id];
   document.getElementById('play').disabled=!takes[it.id];
   document.getElementById('redo').disabled=!takes[it.id];
   document.getElementById('saved').textContent = has?'✓ 녹음됨':'';
@@ -455,7 +541,7 @@ async function uploadPending(){
   persist();
 }
 
-/* ════ 부팅: 대본 로드 → 저장된 세션 복원 ════ */
+/* ════ 부팅: 대본 로드 → 프로필 허브 ════ */
 (async function boot(){
   try{
     await loadScript();                 // script.tsv 먼저 읽어 SCRIPT/SECTIONS 채움
@@ -463,11 +549,9 @@ async function uploadPending(){
     alert('대본(script.tsv)을 불러오지 못했습니다. 파일이 올라가 있는지 확인하세요.');
     return;
   }
-  const st=loadStore();
-  if(st.speakerId && st.meta){
-    meta=st.meta; speakerId=st.speakerId;
-    showSections();                     // 메타 건너뛰고 섹션 선택으로 (이어하기 노출)
-  }
+  // 등록 화자 있으면 허브, 없으면(첫 실행) 바로 온보딩
+  if(loadProfiles().length>0){ showHub(); }
+  else { clearMetaForm(); go('pgMeta'); }
 })();
 </script>
 </body>
