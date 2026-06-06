@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>말해U 수집</title>
+<style>
+  :root{
+    --bg:#f4f1ea; --ink:#1c1a17; --sub:#6b6356;
+    --line:#d8d2c4; --card:#fffdf8;
+    --jn:#0b6b5e; --jb:#9a5b1f; --accent:#0b6b5e;
+    --rec:#c0392b; --rec-on:#e74c3c; --go:#1c1a17;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; height:100%;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    display:flex; flex-direction:column; min-height:100dvh;
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+  .page{display:none; flex:1; flex-direction:column;}
+  .page.on{display:flex;}
+  .wrap{max-width:620px; margin:0 auto; width:100%; padding:24px 22px;}
+
+  h1{font-size:25px; margin:6px 0 4px; letter-spacing:-.5px;}
+  .lead{color:var(--sub); margin:0 0 22px; font-size:15px;}
+
+  /* 메타 */
+  .field{margin-bottom:20px;}
+  .field label{display:block; font-size:15px; color:var(--sub); margin-bottom:8px; font-weight:600;}
+  .opts{display:flex; flex-wrap:wrap; gap:8px;}
+  .opt{
+    flex:1 1 auto; min-width:64px; text-align:center; padding:14px 10px;
+    border:2px solid var(--line); border-radius:14px; background:var(--card);
+    font-size:16px; cursor:pointer; font-weight:600; transition:.12s;
+  }
+  .opt[aria-pressed="true"]{border-color:var(--ink); background:var(--ink); color:#fff;}
+  .bigbtn{width:100%; padding:18px; border:none; border-radius:16px; background:var(--go); color:#fff; font-size:19px; font-weight:700; cursor:pointer; margin-top:8px;}
+  .bigbtn:disabled{opacity:.35;}
+  .sel{width:100%; padding:14px; border:2px solid var(--line); border-radius:14px; background:var(--card); font-size:16px; font-weight:600; color:var(--ink); appearance:none;}
+  .yearrow{display:flex; gap:8px;}
+  .yearrow .sel{flex:1;}
+  .txt{flex:1; padding:14px; border:2px solid var(--line); border-radius:14px; background:var(--card); font-size:16px; font-weight:600; color:var(--ink); min-width:0;}
+  .consent{background:var(--card); border:2px solid var(--line); border-radius:16px; padding:16px; margin:6px 0 16px;}
+  .chk{display:flex; gap:11px; align-items:flex-start; cursor:pointer;}
+  .chk input{width:24px; height:24px; flex:none; margin-top:2px; accent-color:var(--accent);}
+  .chk span{font-size:13.5px; line-height:1.55; color:var(--sub);}
+  .chk strong{color:var(--ink); font-weight:700;}
+  .consent-link{display:inline-block; margin-top:12px; padding-left:35px; font-size:14px; color:var(--accent); font-weight:700; text-decoration:none;}
+
+  /* 섹션 선택 */
+  .resume{
+    background:var(--card); border:2px solid var(--accent); border-radius:16px;
+    padding:16px; margin-bottom:20px; display:flex; align-items:center; gap:14px;
+  }
+  .resume .txt{flex:1;}
+  .resume .t1{font-weight:700; font-size:16px;}
+  .resume .t2{font-size:13px; color:var(--sub); margin-top:2px;}
+  .resume button{padding:12px 18px; border:none; border-radius:12px; background:var(--accent); color:#fff; font-weight:700; font-size:15px; cursor:pointer;}
+  .seclist{display:grid; gap:12px;}
+  .seccard{
+    border:2px solid var(--line); border-radius:16px; background:var(--card);
+    padding:16px 18px; cursor:pointer; text-align:left;
+  }
+  .seccard:active{transform:scale(.99);}
+  .sechead{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px;}
+  .secname{font-size:17px; font-weight:700;}
+  .secnum{font-size:14px; color:var(--sub); font-variant-numeric:tabular-nums;}
+  .secbar{height:8px; background:var(--line); border-radius:99px; overflow:hidden;}
+  .secbar i{display:block; height:100%; background:var(--accent); width:0; transition:width .3s;}
+  .seccard.done{border-color:var(--accent);}
+  .seccard.done .secname::after{content:" ✓"; color:var(--accent);}
+
+  /* 녹음 */
+  .topbar{display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1px solid var(--line); font-size:13px; color:var(--sub);}
+  .who{font-weight:700; color:var(--ink);}
+  .prog{flex:1; height:8px; background:var(--line); border-radius:99px; overflow:hidden;}
+  .prog i{display:block; height:100%; background:var(--accent); width:0;}
+  .stage{flex:1; display:flex; flex-direction:column; justify-content:center;}
+  .idtag{font-size:13px; color:var(--sub); letter-spacing:1px; margin-bottom:14px;}
+  .std{font-size:34px; font-weight:800; line-height:1.3; letter-spacing:-1px; margin-bottom:22px;}
+  .hint{font-size:13px; color:var(--sub); margin-bottom:12px;}
+  .dia{border-top:1px dashed var(--line); padding-top:16px;}
+  .dline{display:flex; gap:10px; align-items:baseline; font-size:22px; font-weight:600;}
+  .badge{font-size:12px; font-weight:800; padding:3px 9px; border-radius:8px; color:#fff; flex:none; white-space:nowrap;}
+  .badge.jn{background:var(--jn);} .badge.jb{background:var(--jb);}
+
+  .controls{padding:18px 22px 24px; max-width:620px; margin:0 auto; width:100%;}
+  .recbtn{width:100%; padding:24px; border:none; border-radius:20px; background:var(--rec); color:#fff; font-size:22px; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:12px;}
+  .recbtn.recording{background:var(--rec-on); animation:pulse 1.1s infinite;}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(231,76,60,.5);}50%{box-shadow:0 0 0 16px rgba(231,76,60,0);}}
+  .dot{width:16px; height:16px; border-radius:50%; background:#fff;}
+  .recbtn.recording .dot{border-radius:4px;}
+  .timer{text-align:center; font-size:15px; color:var(--sub); margin-top:8px; min-height:20px; font-variant-numeric:tabular-nums;}
+  .subrow{display:flex; gap:10px; margin-top:12px;}
+  .subbtn{flex:1; padding:14px; border:2px solid var(--line); border-radius:14px; background:var(--card); font-size:16px; font-weight:700; cursor:pointer; color:var(--ink);}
+  .subbtn:disabled{opacity:.35;}
+  .saved{font-size:13px; color:var(--accent); font-weight:700; text-align:center; margin-top:10px; min-height:18px;}
+  .navrow{display:flex; gap:10px; margin-top:8px;}
+  .navbtn{flex:1; padding:15px; border:none; border-radius:14px; font-size:16px; font-weight:700; cursor:pointer;}
+  .prev{background:var(--line); color:var(--ink);}
+  .next{background:var(--go); color:#fff;}
+  .backbtn{width:100%; padding:14px; margin-top:10px; border:2px solid var(--line); border-radius:14px; background:transparent; font-size:15px; font-weight:700; color:var(--sub); cursor:pointer;}
+</style>
+</head>
+<body>
+
+<!-- 1. 메타 -->
+<section class="page on" id="pgMeta"><div class="wrap">
+  <h1>말해U 발화 수집</h1>
+  <p class="lead">화자 정보를 한 번만 입력해 주세요.</p>
+
+  <div class="field"><label>출생지역</label>
+    <div class="opts" data-key="regionCode">
+      <div class="opt" data-v="061">광주</div>
+      <div class="opt" data-v="062">전남</div>
+      <div class="opt" data-v="063">전북</div>
+    </div>
+  </div>
+
+  <div class="field"><label>성별</label>
+    <div class="opts" data-key="sex">
+      <div class="opt" data-v="남">남</div><div class="opt" data-v="여">여</div>
+    </div></div>
+
+  <div class="field"><label>출생연도</label>
+    <div class="yearrow">
+      <input id="inYear" class="txt" type="number" inputmode="numeric" placeholder="직접입력 (예: 1958)" min="1900" max="2025">
+      <select id="selYear" class="sel" style="flex:0 0 130px;"></select>
+    </div>
+  </div>
+
+  <div class="consent">
+    <label class="chk">
+      <input type="checkbox" id="agree">
+      <span><strong>다음을 눌러 진행하면, 음성(녹음)·성별·출생연도·출생지역 및 녹음 환경 정보가 수집·이용되는 것에 동의합니다.</strong>
+      수집된 음성은 비식별 처리되며, 방언 음성 인식 데이터 구축 목적으로만 이용됩니다.
+      원하지 않으시면 수집에 응하지 않으셔도 됩니다.</span>
+    </label>
+    <a class="consent-link" href="L2U_consent.html" target="_blank" rel="noopener">수집·보관·이용 상세 안내 보기 ↗</a>
+  </div>
+
+  <button class="bigbtn" id="toSections" disabled>다음</button>
+</div></section>
+
+<!-- 2. 섹션 선택 -->
+<section class="page" id="pgSec"><div class="wrap">
+  <h1>섹션 선택</h1>
+  <p class="lead" id="secLead"></p>
+  <div id="resumeBox"></div>
+  <div class="seclist" id="seclist"></div>
+  <button class="backbtn" id="resetMeta" style="margin-top:18px;">화자 정보 다시 고르기</button>
+</div></section>
+
+<!-- 3. 녹음 -->
+<section class="page" id="pgRec">
+  <div class="topbar">
+    <span class="who" id="who"></span>
+    <span id="secName"></span>
+    <div class="prog"><i id="progbar"></i></div>
+    <span id="count">0/0</span>
+  </div>
+  <div class="wrap stage">
+    <div class="idtag" id="idtag"></div>
+    <div class="std" id="std"></div>
+    <div class="hint">아래 예시는 참고용이에요. 편하신 대로 읽으시면 됩니다.</div>
+    <div class="dia"><div class="dline"><span class="badge" id="badge"></span><span id="dialect"></span></div></div>
+  </div>
+  <div class="controls">
+    <button class="recbtn" id="recbtn"><span class="dot"></span><span id="reclabel">녹음</span></button>
+    <div class="timer" id="timer"></div>
+    <div class="subrow">
+      <button class="subbtn" id="play" disabled>▶ 들어보기</button>
+      <button class="subbtn" id="redo" disabled>↻ 다시 녹음</button>
+    </div>
+    <div class="saved" id="saved"></div>
+    <div class="navrow">
+      <button class="navbtn prev" id="prev">← 이전</button>
+      <button class="navbtn next" id="next">다음 →</button>
+    </div>
+    <button class="backbtn" id="toSecFromRec">■ 섹션 선택으로 (자동 저장)</button>
+  </div>
+</section>
+
+<script>
+/* ════ 대본 데이터 ════
+   실제: 검증된 1000개를 섹션별로 로드. 권역(region)에 따라 dialect는 jn/jb 중 하나만 사용.
+   각 항목: {id, sec, std, jn, jb}                                        */
+const SCRIPT = [
+  // 식당주문 (데모 표본 — 실제 150개)
+  {id:"L2U-0001", sec:"식당주문", std:"여기 주문 받아 주세요", jn:"여그 주문 받아 주쇼", jb:"여그 주문 받아 주쇼"},
+  {id:"L2U-0002", sec:"식당주문", std:"이거 하나 주세요", jn:"요거 하나 주쇼잉", jb:"요거 하나 주쇼잉"},
+  {id:"L2U-0007", sec:"식당주문", std:"국물 더 주세요", jn:"국물 좀 더 주랑께요", jb:"국물 좀 더 주랑게요"},
+  {id:"L2U-0017", sec:"식당주문", std:"너무 짜요", jn:"허벌나게 짜브요", jb:"허벌나게 짜요"},
+  // 카페주문
+  {id:"L2U-0154", sec:"카페주문", std:"얼음 빼 주세요", jn:"얼음 빼 주쇼잉", jb:"얼음 빼 주쇼잉"},
+  {id:"L2U-0156", sec:"카페주문", std:"한 잔에 얼마예요?", jn:"한 잔에 을매당가요?", jb:"한 잔에 을매당가요?"},
+  // 계산결제
+  {id:"L2U-0428", sec:"계산결제", std:"결제가 안 돼요", jn:"곈산이 안 되야브요", jb:"계산이 안 되야요"},
+  {id:"L2U-0421", sec:"계산결제", std:"이거 어떻게 누르는 거예요?", jn:"요거 으짜게 누른당가요?", jb:"요거 으짜게 누른당가요?"},
+  // 핵심단답
+  {id:"L2U-0833", sec:"단답결제", std:"포장이요", jn:"싸 갈라요", jb:"싸 갈게요"},
+  {id:"L2U-0835", sec:"단답결제", std:"현금으로요", jn:"현금으로라", jb:"현금으로요"},
+];
+
+/* 섹션 순서·정의 (실제론 전 섹션) */
+const SECTIONS = ["식당주문","카페주문","시장","가게편의점","계산결제","주문확인변경","인사재촉맛","단답주문","단답카페","단답결제","단답응답"];
+
+/* ════ 상태 / 저장 ════ */
+let meta = {regionCode:null, region:null, sex:null, birthYear:null};
+let speakerId = null;
+let curSec = null, idx = 0;
+const takes = {};                       // id -> {blob,url}  (오디오는 메모리; 진행률만 영속)
+const STORE_KEY = 'l2u_progress_v1';
+const REGION_NAME = {'061':'광주','062':'전남','063':'전북'};
+/* 방언 예시 선택: 광주·전남 → 전남 예시 / 전북 → 전북 예시 */
+function dialectOf(it){ return meta.regionCode==='063' ? it.jb : it.jn; }
+function regionLabel(){ return REGION_NAME[meta.regionCode]||''; }
+
+function loadStore(){ try{return JSON.parse(localStorage.getItem(STORE_KEY))||{};}catch(e){return {};} }
+function saveStore(obj){ try{localStorage.setItem(STORE_KEY, JSON.stringify(obj));}catch(e){} }
+
+function persist(){
+  const s = loadStore();
+  s.speakerId = speakerId; s.meta = meta;
+  s.done = s.done || {};
+  Object.keys(takes).forEach(id=> s.done[id]=true);
+  s.lastSec = curSec; s.lastIdx = idx;
+  saveStore(s);
+}
+
+/* ════ 메타 입력 ════ */
+// 생년 드롭다운 채우기 (보조 — 고르면 인풋에 채워짐)
+(function fillYears(){
+  const sel=document.getElementById('selYear');
+  const now=new Date().getFullYear();
+  sel.innerHTML='<option value="">목록</option>';
+  for(let y=now;y>=1930;y--) sel.insertAdjacentHTML('beforeend',`<option value="${y}">${y}년</option>`);
+})();
+
+function readBirthYear(){
+  const v=parseInt(document.getElementById('inYear').value,10);
+  return (v>=1900&&v<=new Date().getFullYear())?v:null;
+}
+function refreshMeta(){
+  meta.region = meta.regionCode?REGION_NAME[meta.regionCode]:null;
+  meta.birthYear = readBirthYear();
+  const ok = meta.regionCode && meta.sex && meta.birthYear && document.getElementById('agree').checked;
+  document.getElementById('toSections').disabled = !ok;
+}
+document.getElementById('selYear').addEventListener('change',()=>{
+  const v=document.getElementById('selYear').value;
+  if(v) document.getElementById('inYear').value=v;   // 드롭다운 선택 → 인풋에 반영
+  refreshMeta();
+});
+document.getElementById('inYear').addEventListener('input',refreshMeta);
+document.getElementById('agree').addEventListener('change',refreshMeta);
+document.querySelectorAll('#pgMeta .opts').forEach(grp=>{
+  grp.querySelectorAll('.opt').forEach(o=>o.addEventListener('click',()=>{
+    grp.querySelectorAll('.opt').forEach(x=>x.setAttribute('aria-pressed','false'));
+    o.setAttribute('aria-pressed','true'); meta[grp.dataset.key]=o.dataset.v; refreshMeta();
+  }));
+});
+document.getElementById('toSections').addEventListener('click',()=>{
+  speakerId = `${meta.regionCode}_${meta.sex}_${meta.birthYear}_${Date.now().toString(36)}`;
+  persist(); showSections();
+});
+document.getElementById('resetMeta').addEventListener('click',()=>{ go('pgMeta'); });
+
+/* ════ 섹션 선택 ════ */
+function go(id){ document.querySelectorAll('.page').forEach(p=>p.classList.remove('on')); document.getElementById(id).classList.add('on'); }
+
+function secItems(sec){ return SCRIPT.filter(x=>x.sec===sec); }
+function secDone(sec){ const s=loadStore().done||{}; return secItems(sec).filter(x=>s[x.id]).length; }
+
+function showSections(){
+  document.getElementById('secLead').textContent = `${regionLabel()} · ${meta.sex} · ${meta.birthYear}년생 — 섹션을 고르세요.`;
+  // 이어하기
+  const st = loadStore();
+  const box = document.getElementById('resumeBox'); box.innerHTML='';
+  if(st.lastSec && secItems(st.lastSec).length){
+    box.innerHTML = `<div class="resume"><div class="txt">
+      <div class="t1">이어하기</div>
+      <div class="t2">${st.lastSec} · ${ (st.lastIdx||0)+1 }번째부터</div>
+      </div><button id="resumeBtn">계속</button></div>`;
+    document.getElementById('resumeBtn').addEventListener('click',()=>{ openSec(st.lastSec, st.lastIdx||0); });
+  }
+  // 섹션 카드
+  const list = document.getElementById('seclist'); list.innerHTML='';
+  SECTIONS.filter(s=>secItems(s).length).forEach(sec=>{
+    const total=secItems(sec).length, done=secDone(sec), pct=Math.round(done/total*100);
+    const card=document.createElement('button');
+    card.className='seccard'+(done===total?' done':'');
+    card.innerHTML=`<div class="sechead"><span class="secname">${sec}</span><span class="secnum">${done} / ${total}</span></div>
+      <div class="secbar"><i style="width:${pct}%"></i></div>`;
+    card.addEventListener('click',()=>openSec(sec,0));
+    list.appendChild(card);
+  });
+  go('pgSec');
+}
+
+/* ════ 녹음 페이지 ════ */
+function openSec(sec, startIdx){
+  curSec=sec; idx=startIdx||0;
+  document.getElementById('who').textContent=`${regionLabel()}·${meta.sex}·${meta.birthYear}`;
+  document.getElementById('secName').textContent=sec;
+  go('pgRec'); render();
+}
+
+function render(){
+  const items=secItems(curSec); const it=items[idx];
+  document.getElementById('idtag').textContent=it.id;
+  document.getElementById('std').textContent=it.std;
+  // 권역별 예시 하나만 (전북=063 → jb / 광주·전남 → jn)
+  const isJB = meta.regionCode==='063';
+  document.getElementById('badge').textContent = isJB?'전북':'광주/전남';
+  document.getElementById('badge').className = 'badge '+(isJB?'jb':'jn');
+  document.getElementById('dialect').textContent = dialectOf(it);
+  document.getElementById('count').textContent=`${idx+1}/${items.length}`;
+  document.getElementById('progbar').style.width=((idx+1)/items.length*100)+'%';
+  const has=!!takes[it.id] || (loadStore().done||{})[it.id];
+  document.getElementById('play').disabled=!takes[it.id];
+  document.getElementById('redo').disabled=!takes[it.id];
+  document.getElementById('saved').textContent = has?'✓ 녹음됨':'';
+  document.getElementById('prev').disabled = idx===0;
+  document.getElementById('next').textContent = idx===items.length-1 ? '완료 →' : '다음 →';
+  resetRecBtn(); document.getElementById('timer').textContent='';
+}
+
+document.getElementById('prev').addEventListener('click',()=>{ if(idx>0){idx--; persist(); render();} });
+document.getElementById('next').addEventListener('click',()=>{
+  const items=secItems(curSec);
+  persist();                       // 다음 누를 때마다 저장
+  if(idx<items.length-1){ idx++; render(); }
+  else { uploadPending(); showSections(); }   // 섹션 끝 → (실배포)업로드 후 선택으로
+});
+document.getElementById('toSecFromRec').addEventListener('click',()=>{ persist(); uploadPending(); showSections(); });
+
+/* ════ 녹음 (Web Audio → WAV) ════ */
+let audioCtx,stream,src,proc,recording=false,chunks=[],sr=44100,tStart=0,tInt;
+async function startRec(){
+  try{ stream=await navigator.mediaDevices.getUserMedia({audio:{noiseSuppression:false,echoCancellation:false,autoGainControl:false}}); }
+  catch(e){ alert('마이크 권한이 필요합니다.'); return; }
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)(); sr=audioCtx.sampleRate;
+  src=audioCtx.createMediaStreamSource(stream);
+  proc=audioCtx.createScriptProcessor(4096,1,1);  // 실배포: AudioWorklet 권장
+  chunks=[];
+  proc.onaudioprocess=e=>{ if(recording) chunks.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
+  src.connect(proc); proc.connect(audioCtx.destination);
+  recording=true; tStart=Date.now();
+  tInt=setInterval(()=>document.getElementById('timer').textContent=((Date.now()-tStart)/1000).toFixed(1)+'초',100);
+  const b=document.getElementById('recbtn'); b.classList.add('recording'); document.getElementById('reclabel').textContent='정지';
+}
+function stopRec(){
+  recording=false; clearInterval(tInt);
+  try{proc.disconnect();src.disconnect();stream.getTracks().forEach(t=>t.stop());audioCtx.close();}catch(e){}
+  const blob=encodeWAV(flatten(chunks),sr); const it=secItems(curSec)[idx];
+  if(takes[it.id]) URL.revokeObjectURL(takes[it.id].url);
+  takes[it.id]={blob,url:URL.createObjectURL(blob)};
+  resetRecBtn();
+  document.getElementById('play').disabled=false; document.getElementById('redo').disabled=false;
+  document.getElementById('saved').textContent='✓ 녹음됨';
+  persist();                        // 녹음 즉시 진행률 저장
+}
+function resetRecBtn(){ const b=document.getElementById('recbtn'); b.classList.remove('recording'); document.getElementById('reclabel').textContent='녹음'; }
+document.getElementById('recbtn').addEventListener('click',()=> recording?stopRec():startRec());
+document.getElementById('play').addEventListener('click',()=>{ const t=takes[secItems(curSec)[idx].id]; if(t) new Audio(t.url).play(); });
+document.getElementById('redo').addEventListener('click',()=>{ const it=secItems(curSec)[idx]; if(takes[it.id]){URL.revokeObjectURL(takes[it.id].url); delete takes[it.id];} render(); });
+
+/* WAV 인코딩 */
+function flatten(cs){let n=cs.reduce((a,c)=>a+c.length,0),o=new Float32Array(n),p=0;for(const c of cs){o.set(c,p);p+=c.length;}return o;}
+function encodeWAV(s,rate){const b=new ArrayBuffer(44+s.length*2),v=new DataView(b);const w=(o,t)=>{for(let i=0;i<t.length;i++)v.setUint8(o+i,t.charCodeAt(i));};
+  w(0,'RIFF');v.setUint32(4,36+s.length*2,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,s.length*2,true);
+  let o=44;for(let i=0;i<s.length;i++,o+=2){let x=Math.max(-1,Math.min(1,s[i]));v.setInt16(o,x<0?x*0x8000:x*0x7FFF,true);}return new Blob([v],{type:'audio/wav'});}
+
+/* ════ 업로드 (GAS → Drive) ════ */
+const GAS_URL = 'PASTE_YOUR_GAS_WEBAPP_URL_HERE';  // 배포 후 .../exec URL 붙여넣기
+
+function blobToBase64(blob){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result.split(',')[1]);   // data:...;base64, 뒤만
+    r.onerror=rej; r.readAsDataURL(blob);
+  });
+}
+
+async function uploadOne(id){
+  const t=takes[id]; if(!t) return false;
+  const it = SCRIPT.find(x=>x.id===id);
+  const b64 = await blobToBase64(t.blob);
+  const meta = {
+    regionCode: meta_().regionCode, sex: meta_().sex, birthYear: meta_().birthYear,
+    speakerId, id, sec: it?it.sec:'', consent:true
+  };
+  const body = new URLSearchParams();
+  body.append('file', b64);
+  body.append('meta', JSON.stringify(meta));
+  // GAS는 application/x-www-form-urlencoded 를 e.parameter 로 받음 → CORS 단순요청
+  const r = await fetch(GAS_URL, { method:'POST', body });
+  const out = await r.json().catch(()=>({ok:false}));
+  return out.ok===true;
+}
+function meta_(){ return meta; }
+
+async function uploadPending(){
+  if(GAS_URL.startsWith('PASTE_')) return;   // 아직 URL 미설정이면 스킵(로컬 테스트)
+  const ids=Object.keys(takes);
+  for(const id of ids){
+    try{
+      const ok=await uploadOne(id);
+      if(ok){
+        // 업로드 성공분: 메모리에서 비우고 done 유지
+        if(takes[id]){ URL.revokeObjectURL(takes[id].url); delete takes[id]; }
+      }
+    }catch(e){ /* 실패분은 takes에 남겨 재시도 */ }
+  }
+  persist();
+}
+
+/* ════ 부팅: 저장된 세션 복원 ════ */
+(function boot(){
+  const st=loadStore();
+  if(st.speakerId && st.meta){
+    meta=st.meta; speakerId=st.speakerId;
+    // 메타 화면 건너뛰고 섹션 선택으로 (이어하기 노출)
+    showSections();
+  }
+})();
+</script>
+</body>
+</html>
