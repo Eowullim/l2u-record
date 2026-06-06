@@ -185,27 +185,24 @@
 
 <script>
 /* ════ 대본 데이터 ════
-   실제: 검증된 1000개를 섹션별로 로드. 권역(region)에 따라 dialect는 jn/jb 중 하나만 사용.
-   각 항목: {id, sec, std, jn, jb}                                        */
-const SCRIPT = [
-  // 식당주문 (데모 표본 — 실제 150개)
-  {id:"L2U-0001", sec:"식당주문", std:"여기 주문 받아 주세요", jn:"여그 주문 받아 주쇼", jb:"여그 주문 받아 주쇼"},
-  {id:"L2U-0002", sec:"식당주문", std:"이거 하나 주세요", jn:"요거 하나 주쇼잉", jb:"요거 하나 주쇼잉"},
-  {id:"L2U-0007", sec:"식당주문", std:"국물 더 주세요", jn:"국물 좀 더 주랑께요", jb:"국물 좀 더 주랑게요"},
-  {id:"L2U-0017", sec:"식당주문", std:"너무 짜요", jn:"허벌나게 짜브요", jb:"허벌나게 짜요"},
-  // 카페주문
-  {id:"L2U-0154", sec:"카페주문", std:"얼음 빼 주세요", jn:"얼음 빼 주쇼잉", jb:"얼음 빼 주쇼잉"},
-  {id:"L2U-0156", sec:"카페주문", std:"한 잔에 얼마예요?", jn:"한 잔에 을매당가요?", jb:"한 잔에 을매당가요?"},
-  // 계산결제
-  {id:"L2U-0428", sec:"계산결제", std:"결제가 안 돼요", jn:"곈산이 안 되야브요", jb:"계산이 안 되야요"},
-  {id:"L2U-0421", sec:"계산결제", std:"이거 어떻게 누르는 거예요?", jn:"요거 으짜게 누른당가요?", jb:"요거 으짜게 누른당가요?"},
-  // 핵심단답
-  {id:"L2U-0833", sec:"단답결제", std:"포장이요", jn:"싸 갈라요", jb:"싸 갈게요"},
-  {id:"L2U-0835", sec:"단답결제", std:"현금으로요", jn:"현금으로라", jb:"현금으로요"},
-];
+   같은 레포의 script.tsv 에서 로드 (id,sec,std,jn,jb).
+   대본 수정 시 script.tsv만 다시 올리면 됨 — HTML 불변.            */
+let SCRIPT = [];
+let SECTIONS = [];
+const SCRIPT_URL = 'script.tsv';
 
-/* 섹션 순서·정의 (실제론 전 섹션) */
-const SECTIONS = ["식당주문","카페주문","시장","가게편의점","계산결제","주문확인변경","인사재촉맛","단답주문","단답카페","단답결제","단답응답"];
+async function loadScript(){
+  const r = await fetch(SCRIPT_URL, {cache:'no-store'});
+  const text = await r.text();
+  const lines = text.split(/\r?\n/).filter(l=>l.trim());
+  const head = lines.shift().split('\t');           // id sec std jn jb
+  SCRIPT = lines.map(l=>{
+    const c = l.split('\t');
+    return {id:c[0], sec:c[1], std:c[2], jn:c[3], jb:c[4]};
+  });
+  // 섹션 순서: TSV 등장 순서대로 유니크
+  SECTIONS = [...new Set(SCRIPT.map(x=>x.sec))];
+}
 
 /* ════ 상태 / 저장 ════ */
 let meta = {regionCode:null, region:null, sex:null, birthYear:null};
@@ -417,13 +414,18 @@ async function uploadPending(){
   persist();
 }
 
-/* ════ 부팅: 저장된 세션 복원 ════ */
-(function boot(){
+/* ════ 부팅: 대본 로드 → 저장된 세션 복원 ════ */
+(async function boot(){
+  try{
+    await loadScript();                 // script.tsv 먼저 읽어 SCRIPT/SECTIONS 채움
+  }catch(e){
+    alert('대본(script.tsv)을 불러오지 못했습니다. 파일이 올라가 있는지 확인하세요.');
+    return;
+  }
   const st=loadStore();
   if(st.speakerId && st.meta){
     meta=st.meta; speakerId=st.speakerId;
-    // 메타 화면 건너뛰고 섹션 선택으로 (이어하기 노출)
-    showSections();
+    showSections();                     // 메타 건너뛰고 섹션 선택으로 (이어하기 노출)
   }
 })();
 </script>
