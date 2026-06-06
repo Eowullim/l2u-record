@@ -390,19 +390,17 @@ async function uploadOne(id){
   const t=takes[id]; if(!t) return false;
   const it = SCRIPT.find(x=>x.id===id);
   const b64 = await blobToBase64(t.blob);
-  const meta = {
-    regionCode: meta_().regionCode, sex: meta_().sex, birthYear: meta_().birthYear,
+  const m = {
+    regionCode: meta.regionCode, sex: meta.sex, birthYear: meta.birthYear,
     speakerId, id, sec: it?it.sec:'', consent:true
   };
   const body = new URLSearchParams();
   body.append('file', b64);
-  body.append('meta', JSON.stringify(meta));
-  // GAS는 application/x-www-form-urlencoded 를 e.parameter 로 받음 → CORS 단순요청
-  const r = await fetch(GAS_URL, { method:'POST', body });
-  const out = await r.json().catch(()=>({ok:false}));
-  return out.ok===true;
+  body.append('meta', JSON.stringify(m));
+  // GitHub Pages → GAS 교차출처. no-cors로 보냄(응답은 못 읽지만 POST는 전달·저장됨).
+  await fetch(GAS_URL, { method:'POST', mode:'no-cors', body });
+  return true;   // no-cors는 성공/실패 판별 불가 → 보냈으면 성공 간주
 }
-function meta_(){ return meta; }
 
 async function uploadPending(){
   if(GAS_URL.startsWith('PASTE_')) return;   // 아직 URL 미설정이면 스킵(로컬 테스트)
