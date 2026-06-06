@@ -376,7 +376,7 @@ function encodeWAV(s,rate){const b=new ArrayBuffer(44+s.length*2),v=new DataView
   let o=44;for(let i=0;i<s.length;i++,o+=2){let x=Math.max(-1,Math.min(1,s[i]));v.setInt16(o,x<0?x*0x8000:x*0x7FFF,true);}return new Blob([v],{type:'audio/wav'});}
 
 /* ════ 업로드 (GAS → Drive) ════ */
-const GAS_URL = 'PASTE_YOUR_GAS_WEBAPP_URL_HERE';  // 배포 후 .../exec URL 붙여넣기
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwyEZBn7g1h098IQSNqoph09F1laGDHT-1A3XJrjBTi9qSrXwKcophe0H5Y-xPNFR7r/exec';
 
 function blobToBase64(blob){
   return new Promise((res,rej)=>{
