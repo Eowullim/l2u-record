@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>개인정보 수집·이용 동의 안내 | 말해U</title>
+<style>
+  :root{--bg:#f4f1ea;--ink:#1c1a17;--sub:#6b6356;--line:#d8d2c4;--card:#fffdf8;--accent:#0b6b5e;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    line-height:1.7;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);}
+  .wrap{max-width:680px;margin:0 auto;padding:28px 22px 60px;}
+  h1{font-size:24px;letter-spacing:-.5px;margin:6px 0 4px;}
+  .lead{color:var(--sub);font-size:14px;margin:0 0 26px;}
+  h2{font-size:17px;margin:28px 0 8px;padding-top:18px;border-top:1px solid var(--line);}
+  p,li{font-size:15px;color:var(--ink);}
+  ul{padding-left:18px;}
+  .box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:14px 0;}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px;}
+  th,td{border:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top;}
+  th{background:#efe9dd;font-weight:700;}
+  .note{font-size:13px;color:var(--sub);}
+  .back{display:inline-block;margin-top:30px;padding:14px 22px;background:var(--ink);color:#fff;
+    border-radius:12px;text-decoration:none;font-weight:700;font-size:15px;}
+  .draft{background:#fdecea;border:1px solid #e74c3c;color:#922;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:20px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="draft">※ 본 문서는 초안입니다. 실제 운영 전 법무 검토 및 기관 양식 확정이 필요합니다.</div>
+
+  <h1>개인정보 수집·이용 동의 안내</h1>
+  <p class="lead">배리어프리 키오스크 음성 인식 데이터 구축 사업 (말해U) · 방언 발화 데이터 수집</p>
+
+  <p>본 수집에 참여하시면 아래 내용에 따라 개인정보가 수집·이용됩니다. 내용을 확인하시고 동의 여부를 결정해 주세요. <strong>동의하지 않으실 수 있으며, 동의하지 않으시는 경우 수집에 응하지 않으시면 됩니다.</strong></p>
+
+  <h2>1. 수집 항목</h2>
+  <div class="box">
+    <table>
+      <tr><th>구분</th><th>항목</th></tr>
+      <tr><td>음성 정보(민감정보)</td><td>발화 녹음 파일(음성)</td></tr>
+      <tr><td>화자 정보</td><td>성별, 출생연도, 출생지역(광주·전남·전북)</td></tr>
+      <tr><td>수집 환경 정보</td><td>녹음 일시, 소음 환경 정보</td></tr>
+    </table>
+    <p class="note">※ 음성 정보는 개인정보 보호법상 생체정보에 해당하는 민감정보입니다. 이름·연락처 등 직접 식별정보는 수집하지 않습니다.</p>
+  </div>
+
+  <h2>2. 수집·이용 목적</h2>
+  <ul>
+    <li>전남·전북 방언 음성 인식 모델 학습 및 성능 검증</li>
+    <li>배리어프리 키오스크 음성 주문 솔루션의 방언·고령자 발화 인식 고도화</li>
+    <li>구축 데이터셋의 연구 생태계 공개·활용</li>
+  </ul>
+
+  <h2>3. 비식별화 처리</h2>
+  <ul>
+    <li>녹음 후, 전화번호·카드번호 등 식별 가능 정보 및 개인 식별이 가능한 고유명사 구간은 무음 처리 또는 해당 발화 삭제 후 활용합니다.</li>
+    <li>현장 녹음자·비식별 처리자·검수자를 분리 운영하는 구조적 비식별화를 적용합니다.</li>
+    <li>화자는 익명 식별번호로만 관리되며, 직접 식별정보와 연결되지 않습니다.</li>
+  </ul>
+
+  <h2>4. 보유 및 이용 기간</h2>
+  <ul>
+    <li>원천 음성 데이터는 사업 종료 후 파기합니다.</li>
+    <li>비식별화가 완료된 데이터는 암호화하여 보관하며, 공개·활용 약정에 따라 연구 목적으로 일정 기간 보존·공개될 수 있습니다.</li>
+  </ul>
+
+  <h2>5. 제3자 제공 및 위탁</h2>
+  <p>수집된 데이터는 본 사업의 데이터셋 구축·납품 및 약정에 따른 공개 목적 범위 내에서만 이용되며, 그 외 목적의 제3자 제공은 하지 않습니다.</p>
+
+  <h2>6. 동의 거부 권리 및 불이익</h2>
+  <p>참여자는 본 동의를 거부할 권리가 있습니다. 동의하지 않으시는 경우 데이터 수집에 참여하지 않으시면 되며, 그로 인한 별도의 불이익은 없습니다.</p>
+
+  <h2>7. 문의</h2>
+  <p class="note">데이터 수집·처리에 관한 문의는 현장 담당자 또는 사업 운영 주체에게 요청하실 수 있습니다. (연락처는 운영 시 기재)</p>
+
+  <a class="back" href="L2U_PWA.html">← 돌아가기</a>
+</div>
+</body>
+</html>
