@@ -11,6 +11,7 @@
     --line:#cbc4b2; --card:#fffdf8;
     --jn:#0a5f53; --jb:#8a4f17; --accent:#0a5f53;
     --rec:#b5311f; --rec-on:#e0402c; --go:#15130f;
+    --warn:#b5311f;
     --logo-pad:#ffffff;
   }
   body[data-theme="dark"]{
@@ -19,6 +20,7 @@
     --line:#403b34; --card:#2a2723;
     --jn:#4fc4b2; --jb:#e0a766; --accent:#4fc4b2;
     --rec:#e0533f; --rec-on:#f06a55; --go:#3a352f;
+    --warn:#e0a766;
     --logo-pad:#ffffff;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -87,6 +89,16 @@
   .secbar i{display:block; height:100%; background:var(--accent); width:0; transition:width .3s;}
   .seccard.done{border-color:var(--accent);}
   .seccard.done .secname::after{content:" ✓"; color:var(--accent);}
+
+  /* 미전송 알림 */
+  .pend{
+    background:var(--card); border:2px solid var(--warn); border-radius:16px;
+    padding:14px 16px; margin-bottom:18px; display:flex; align-items:center; gap:12px;
+  }
+  .pend .t1{flex:1; font-size:14px; font-weight:700; color:var(--ink); line-height:1.45;}
+  .pend .t1 b{color:var(--warn);}
+  .pend button{padding:11px 16px; border:none; border-radius:12px; background:var(--warn); color:#fff; font-weight:700; font-size:14px; cursor:pointer; flex:none;}
+  .pend button:disabled{opacity:.5;}
 
   /* 자유 발화 진입 카드 (섹션 목록 맨 아래) */
   .divider{display:flex; align-items:center; gap:12px; margin:26px 0 14px; color:var(--sub); font-size:12.5px; font-weight:700;}
@@ -212,6 +224,7 @@
 <section class="page" id="pgSec"><div class="wrap">
   <h1>섹션 선택</h1>
   <p class="lead" id="secLead"></p>
+  <div id="pendBox"></div>
   <div id="resumeBox"></div>
   <div class="seclist" id="seclist"></div>
 
@@ -315,7 +328,7 @@ let meta = {regionCode:null, region:null, sex:null, birthYear:null};
 let speakerId = null;
 let curPid = null;                      // 현재 프로필 일련번호
 let curSec = null, idx = 0;
-const takes = {};                       // id -> {blob,url}  (오디오는 메모리; 진행률만 영속)
+const takes = {};                       // id -> {blob,url}  (메모리 캐시. 원본은 IndexedDB)
 const REGION_NAME = {'061':'광주','062':'전남','063':'전북','099':'기타'};
 const FREE_SEC = '자유발화';            // GAS 폴더 분기 키 — 값 바꾸면 GAS도 같이 바꿔야 함
 const FREE_MAX = 180;                   // 자유 발화 1건 상한(초). WAV 무압축 기준 안전선
@@ -323,6 +336,77 @@ const K_PROFILES = 'l2u_profiles_v1';   // 프로필 목록
 const kDone = pid => `l2u_done_${pid}`; // 프로필별 낭독 진행률
 const kLast = pid => `l2u_last_${pid}`; // 프로필별 마지막 위치
 const kFree = pid => `l2u_free_${pid}`; // 프로필별 자유 발화 목록 [{id,dur,up}]
+
+/* ════ IndexedDB — 업로드 전 WAV 영속 보관 ════
+   메모리(takes)만 쓰면 탭이 닫히거나 업로드가 실패했을 때 원본이 사라진다.
+   녹음 즉시 여기에 넣고, 서버가 저장을 확인(ok:true)한 뒤에만 지운다.
+   권한 프롬프트 없음. localStorage(문자열 5MB)와 달리 Blob을 그대로 담는다. */
+const DB_NAME='l2u_audio', DB_STORE='takes';
+let _db=null;
+function idb(){
+  if(_db) return Promise.resolve(_db);
+  return new Promise((res,rej)=>{
+    const rq=indexedDB.open(DB_NAME,1);
+    rq.onupgradeneeded=()=>{
+      const db=rq.result;
+      if(!db.objectStoreNames.contains(DB_STORE)){
+        const os=db.createObjectStore(DB_STORE,{keyPath:'key'});
+        os.createIndex('pid','pid',{unique:false});   // 화자별 조회용
+      }
+    };
+    rq.onsuccess=()=>{ _db=rq.result; res(_db); };
+    rq.onerror=()=>rej(rq.error);
+  });
+}
+const idbKey=(pid,id)=>`${pid}/${id}`;
+
+async function idbPut(pid,id,blob){
+  try{
+    const db=await idb();
+    await new Promise((res,rej)=>{
+      const tx=db.transaction(DB_STORE,'readwrite');
+      tx.objectStore(DB_STORE).put({key:idbKey(pid,id), pid, id, blob, ts:Date.now()});
+      tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+    });
+  }catch(e){ /* 영속 저장 실패해도 메모리 녹음은 그대로 살아 있음 */ }
+}
+async function idbDel(pid,id){
+  try{
+    const db=await idb();
+    await new Promise((res,rej)=>{
+      const tx=db.transaction(DB_STORE,'readwrite');
+      tx.objectStore(DB_STORE).delete(idbKey(pid,id));
+      tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+    });
+  }catch(e){}
+}
+async function idbByPid(pid){
+  try{
+    const db=await idb();
+    return await new Promise((res,rej)=>{
+      const tx=db.transaction(DB_STORE,'readonly');
+      const rq=tx.objectStore(DB_STORE).index('pid').getAll(pid);
+      rq.onsuccess=()=>res(rq.result||[]);
+      rq.onerror=()=>rej(rq.error);
+    });
+  }catch(e){ return []; }
+}
+
+/* 현재 화자의 미업로드 녹음을 메모리로 복구 */
+async function restoreTakes(){
+  if(curPid==null) return;
+  const rows=await idbByPid(curPid);
+  rows.forEach(r=>{
+    if(takes[r.id]) return;
+    takes[r.id]={blob:r.blob, url:URL.createObjectURL(r.blob)};
+  });
+}
+function clearTakes(){
+  Object.keys(takes).forEach(k=>{
+    if(takes[k] && takes[k].url) URL.revokeObjectURL(takes[k].url);
+    delete takes[k];
+  });
+}
 
 /* 방언 예시 노출 순서: 전북(063) → 전북 예시 먼저 / 그 외(광주·전남·기타) → 광주·전남 예시 먼저.
    예시 원본은 jn(광주·전남 공용)·jb(전북) 2종이며, 항상 둘 다 노출한다.            */
@@ -409,7 +493,7 @@ document.getElementById('toSections').addEventListener('click',()=>{
   profiles.push({pid, regionCode:meta.regionCode, region:meta.region, sex:meta.sex, birthYear:meta.birthYear, speakerId});
   saveProfiles(profiles);
   curPid = pid; curSec = null;
-  Object.keys(takes).forEach(k=>delete takes[k]);
+  clearTakes();
   showSections();
 });
 
@@ -441,11 +525,13 @@ function showHub(){
   });
   go('pgHub');
 }
-function openProfile(p){
+async function openProfile(p){
   curPid=p.pid; speakerId=p.speakerId; curSec=null;
   meta={regionCode:p.regionCode, region:p.region, sex:p.sex, birthYear:p.birthYear};
-  Object.keys(takes).forEach(k=>delete takes[k]);
+  clearTakes();
+  await restoreTakes();          // 이전 세션의 미전송 녹음 복구
   showSections();
+  retryUpload();                 // 복구분 자동 재시도
 }
 
 /* ════ 섹션 선택 ════ */
@@ -454,6 +540,7 @@ function secDone(sec){ const s=doneMap(); return secItems(sec).filter(x=>s[x.id]
 
 function showSections(){
   document.getElementById('secLead').textContent = `${regionLabel()} · ${meta.sex} · ${meta.birthYear}년생 — 섹션을 고르세요.`;
+  drawPending();
   // 이어하기
   const st = jget(kLast(curPid), null);
   const box = document.getElementById('resumeBox'); box.innerHTML='';
@@ -479,6 +566,26 @@ function showSections(){
   go('pgSec');
 }
 document.getElementById('freeCard').addEventListener('click', showFree);
+
+/* 미전송 알림 — 업로드가 실패해 기기에 남아 있는 녹음이 있을 때만 노출 */
+function drawPending(){
+  const box=document.getElementById('pendBox');
+  const n=Object.keys(takes).length;
+  if(n===0){ box.innerHTML=''; return; }
+  box.innerHTML=`<div class="pend">
+    <div class="t1">아직 서버로 보내지 못한 녹음이 <b>${n}건</b> 있어요.<br>기기에 안전하게 보관 중입니다.</div>
+    <button id="retryBtn">다시 보내기</button></div>`;
+  document.getElementById('retryBtn').addEventListener('click',async ()=>{
+    const b=document.getElementById('retryBtn');
+    b.disabled=true; b.textContent='보내는 중…';
+    await uploadPending();
+    showSections();
+  });
+}
+async function retryUpload(){
+  await uploadPending();
+  if(document.getElementById('pgSec').classList.contains('on')) showSections();
+}
 
 /* ════ 낭독 녹음 페이지 ════ */
 function openSec(sec, startIdx){
@@ -520,9 +627,11 @@ document.getElementById('next').addEventListener('click',()=>{
   const items=secItems(curSec);
   persist();                       // 다음 누를 때마다 저장
   if(idx<items.length-1){ idx++; render(); }
-  else { uploadPending(); showSections(); }   // 섹션 끝 → 업로드 후 선택으로
+  else { uploadPending().then(showSections); }   // 섹션 끝 → 업로드 후 선택으로
 });
-document.getElementById('toSecFromRec').addEventListener('click',()=>{ persist(); uploadPending(); showSections(); });
+document.getElementById('toSecFromRec').addEventListener('click',()=>{
+  persist(); uploadPending().then(showSections);
+});
 
 /* ════ 녹음 엔진 (Web Audio → WAV, iOS Safari 대응) ════
    - AudioContext/스트림은 첫 녹음 때 한 번만 생성해 재사용
@@ -587,8 +696,9 @@ function stopRec(){
     return;
   }
   const blob=encodeWAV(flat,sr); const it=secItems(curSec)[idx];
-  if(takes[it.id]) URL.revokeObjectURL(takes[it.id].url);
+  if(takes[it.id] && takes[it.id].url) URL.revokeObjectURL(takes[it.id].url);
   takes[it.id]={blob,url:URL.createObjectURL(blob)};
+  idbPut(curPid, it.id, blob);               // 원본 영속 보관
   resetRecBtn();
   document.getElementById('play').disabled=false; document.getElementById('redo').disabled=false;
   document.getElementById('saved').textContent='✓ 녹음됨';
@@ -600,7 +710,12 @@ document.getElementById('play').addEventListener('click',()=>{
   const t=takes[secItems(curSec)[idx].id];
   if(t){ const a=new Audio(t.url); a.play().catch(()=>alert('재생할 수 없습니다.')); }
 });
-document.getElementById('redo').addEventListener('click',()=>{ const it=secItems(curSec)[idx]; if(takes[it.id]){URL.revokeObjectURL(takes[it.id].url); delete takes[it.id];} render(); });
+document.getElementById('redo').addEventListener('click',()=>{
+  const it=secItems(curSec)[idx];
+  if(takes[it.id]){ if(takes[it.id].url) URL.revokeObjectURL(takes[it.id].url); delete takes[it.id]; }
+  idbDel(curPid, it.id);
+  render();
+});
 
 /* WAV 인코딩 */
 function flatten(cs){let n=cs.reduce((a,c)=>a+c.length,0),o=new Float32Array(n),p=0;for(const c of cs){o.set(c,p);p+=c.length;}return o;}
@@ -668,8 +783,9 @@ function stopFree(){
   const list=freeList();
   // 연번은 화자별 누적(삭제 없음) — 파일명에 타임스탬프가 붙어 중복 위험 없음
   const id=`FREE_${String(list.length+1).padStart(3,'0')}`;
-  takes[id]={blob:encodeWAV(flat,sr), url:null};
-  takes[id].url=URL.createObjectURL(takes[id].blob);
+  const blob=encodeWAV(flat,sr);
+  takes[id]={blob, url:URL.createObjectURL(blob)};
+  idbPut(curPid, id, blob);                  // 원본 영속 보관
   list.push({id, dur, up:false});
   saveFreeList(list);
   drawTiles();
@@ -714,27 +830,33 @@ async function uploadOne(id){
   return data && data.ok === true;           // 서버가 저장 성공을 확인한 경우만 true
 }
 
+let uploading=false;
 async function uploadPending(){
+  if(uploading) return;                      // 중복 실행 방지(뒤로가기 연타 등)
   if(GAS_URL.startsWith('PASTE_')) return;   // 아직 URL 미설정이면 스킵(로컬 테스트)
-  const ids=Object.keys(takes);
-  for(const id of ids){
-    try{
-      const ok=await uploadOne(id);
-      if(ok){
+  uploading=true;
+  const pid=curPid;
+  try{
+    for(const id of Object.keys(takes)){
+      try{
+        const ok=await uploadOne(id);
+        if(!ok) continue;                    // 실패분은 takes·IndexedDB에 남겨 재시도
         if(id.startsWith('FREE_')){          // 자유 발화: 목록에 업로드 완료 표시
           const list=freeList(); const f=list.find(x=>x.id===id);
           if(f){ f.up=true; saveFreeList(list); }
         }
-        // 업로드 성공분: 메모리에서 비우고 진행률은 유지
+        await idbDel(pid, id);               // 서버 저장 확인 후에만 영속본 삭제
         if(takes[id]){ if(takes[id].url) URL.revokeObjectURL(takes[id].url); delete takes[id]; }
-      }
-    }catch(e){ /* 실패분은 takes에 남겨 재시도 */ }
-  }
+      }catch(e){ /* 개별 실패는 무시하고 다음 건으로 */ }
+    }
+  } finally { uploading=false; }
   persist();
 }
 
 /* ════ 부팅: 대본 로드 → 프로필 허브 ════ */
 (async function boot(){
+  // 저장 공간 영속 승격 요청(프롬프트 없음, 거부돼도 정상 동작)
+  try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
   try{
     await loadScript();                 // script.tsv 먼저 읽어 SCRIPT/SECTIONS 채움
   }catch(e){
