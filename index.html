@@ -188,8 +188,8 @@
 
   <div class="field"><label>출생지역</label>
     <div class="opts" data-key="regionCode">
-      <div class="opt" data-v="061">광주</div>
-      <div class="opt" data-v="062">전남</div>
+      <div class="opt" data-v="061">전남</div>
+      <div class="opt" data-v="062">광주</div>
       <div class="opt" data-v="063">전북</div>
       <div class="opt" data-v="099">기타</div>
     </div>
@@ -329,7 +329,7 @@ let speakerId = null;
 let curPid = null;                      // 현재 프로필 일련번호
 let curSec = null, idx = 0;
 const takes = {};                       // id -> {blob,url}  (메모리 캐시. 원본은 IndexedDB)
-const REGION_NAME = {'061':'광주','062':'전남','063':'전북','099':'기타'};
+const REGION_NAME = {'061':'전남','062':'광주','063':'전북','099':'기타'};
 const FREE_SEC = '자유발화';            // GAS 폴더 분기 키 — 값 바꾸면 GAS도 같이 바꿔야 함
 const FREE_MAX = 180;                   // 자유 발화 1건 상한(초). WAV 무압축 기준 안전선
 const K_PROFILES = 'l2u_profiles_v1';   // 프로필 목록
