@@ -210,7 +210,7 @@
   <div class="consent">
     <label class="chk">
       <input type="checkbox" id="agree">
-      <span><strong>다음을 눌러 진행하면, 음성(녹음)·성별·출생연도·출생지역 및 녹음 환경 정보가 수집·이용되는 것에 동의합니다.</strong>
+      <span><strong>다음을 눌러 진행하면, 음성(녹음, 선택시 민감정보)·성별·출생연도·출생지역 및 녹음 환경 정보가 수집·이용되는 것에 동의합니다.</strong>
       수집된 음성은 비식별 처리되며, 방언 음성 인식 데이터 구축 목적으로만 이용됩니다.
       원하지 않으시면 수집에 응하지 않으셔도 됩니다.</span>
     </label>
@@ -326,6 +326,7 @@ async function loadScript(){
 /* ════ 상태 / 저장 ════ */
 let meta = {regionCode:null, region:null, sex:null, birthYear:null};
 let speakerId = null;
+let consentAt = null;                   // 화자가 동의 체크한 시각(ISO)
 let curPid = null;                      // 현재 프로필 일련번호
 let curSec = null, idx = 0;
 const takes = {};                       // id -> {blob,url}  (메모리 캐시. 원본은 IndexedDB)
@@ -490,7 +491,8 @@ document.getElementById('toSections').addEventListener('click',()=>{
   const profiles = loadProfiles();
   const pid = (profiles.reduce((m,p)=>Math.max(m,p.pid),0) || 0) + 1;
   speakerId = `${deviceId()}_${pid}_${meta.regionCode}_${meta.sex}_${meta.birthYear}`;
-  profiles.push({pid, regionCode:meta.regionCode, region:meta.region, sex:meta.sex, birthYear:meta.birthYear, speakerId});
+  consentAt = new Date().toISOString();   // 동의 없이는 이 지점에 도달 불가
+  profiles.push({pid, regionCode:meta.regionCode, region:meta.region, sex:meta.sex, birthYear:meta.birthYear, speakerId, consentAt});
   saveProfiles(profiles);
   curPid = pid; curSec = null;
   clearTakes();
@@ -526,7 +528,7 @@ function showHub(){
   go('pgHub');
 }
 async function openProfile(p){
-  curPid=p.pid; speakerId=p.speakerId; curSec=null;
+  curPid=p.pid; speakerId=p.speakerId; consentAt=p.consentAt||''; curSec=null;
   meta={regionCode:p.regionCode, region:p.region, sex:p.sex, birthYear:p.birthYear};
   clearTakes();
   await restoreTakes();          // 이전 세션의 미전송 녹음 복구
@@ -815,7 +817,7 @@ async function uploadOne(id){
   const b64 = await blobToBase64(t.blob);
   const m = {
     regionCode: meta.regionCode, sex: meta.sex, birthYear: meta.birthYear,
-    speakerId, id, sec, consent:true
+    speakerId, id, sec, consent:true, consentAt
   };
   const body = new URLSearchParams();
   body.append('file', b64);
