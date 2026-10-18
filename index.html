@@ -66,6 +66,21 @@
   .chk strong{color:var(--ink); font-weight:700;}
   .consent-link{display:inline-block; margin-top:12px; padding-left:35px; font-size:14px; color:var(--accent); font-weight:700; text-decoration:none;}
 
+  /* 화자 아이디 + 사례비 정보 (이번 주 한정) */
+  .idbox{background:var(--card); border:2px solid var(--accent); border-radius:16px; padding:16px; margin-bottom:14px; text-align:center;}
+  .idbox .i1{font-size:13px; color:var(--sub); font-weight:700;}
+  .idbox .i2{font-size:30px; font-weight:800; letter-spacing:2px; margin:4px 0 10px; font-family:ui-monospace,Menlo,Consolas,monospace; color:var(--ink); user-select:all;}
+  .idbox .i3{font-size:13px; color:var(--sub); line-height:1.5; margin-top:10px;}
+  .copybtn{padding:10px 18px; border:none; border-radius:12px; background:var(--accent); color:#fff; font-weight:700; font-size:15px; cursor:pointer;}
+  .paybox{background:var(--card); border:2px solid var(--line); border-radius:16px; padding:16px; margin-bottom:20px;}
+  .paybox .p1{font-size:16px; font-weight:700; margin-bottom:4px;}
+  .paybox .p2{font-size:13px; color:var(--sub); line-height:1.5; margin-bottom:12px;}
+  .paybox .txt{width:100%; margin-bottom:8px; flex:none;}
+  .paybox .paymsg{font-size:13.5px; font-weight:700; margin-top:8px; min-height:18px; text-align:center;}
+  .paydone{display:flex; align-items:center; gap:10px;}
+  .paydone .t{flex:1; font-size:15px; font-weight:700; color:var(--accent);}
+  .paydone button{padding:9px 14px; border:2px solid var(--line); border-radius:12px; background:transparent; font-weight:700; font-size:13px; cursor:pointer; color:var(--sub);}
+
   /* 섹션 선택 */
   .resume{
     background:var(--card); border:2px solid var(--accent); border-radius:16px;
@@ -212,7 +227,8 @@
       <input type="checkbox" id="agree">
       <span><strong>다음을 눌러 진행하면, 음성(녹음, 선택시 민감정보)·성별·출생연도·출생지역 및 녹음 환경 정보가 수집·이용되는 것에 동의합니다.</strong>
       수집된 음성은 비식별 처리되며, 방언 음성 인식 데이터 구축 목적으로만 이용됩니다.
-      원하지 않으시면 수집에 응하지 않으셔도 됩니다.</span>
+      원하지 않으시면 수집에 응하지 않으셔도 됩니다.
+      사례비를 받으시려면 다음 화면에서 이름·계좌를 입력해 주세요(지급 후 파기).</span>
     </label>
     <a class="consent-link" href="L2U_consent.html" target="_blank" rel="noopener">수집·보관·이용 상세 안내 보기 ↗</a>
   </div>
@@ -224,6 +240,17 @@
 <section class="page" id="pgSec"><div class="wrap">
   <h1>섹션 선택</h1>
   <p class="lead" id="secLead"></p>
+
+  <div class="idbox">
+    <div class="i1">내 아이디</div>
+    <div class="i2" id="idShow"></div>
+    <button class="copybtn" id="copyId">아이디 복사</button>
+    <div class="i3">녹음을 마치면 이 아이디를 담당자에게 보내 주세요.<br>
+      다른 폰이나 다른 브라우저로 바꿔 이어서 하셨다면, 새로 나온 아이디도 함께 보내 주세요.</div>
+  </div>
+
+  <div class="paybox" id="payBox"></div>
+
   <div id="pendBox"></div>
   <div id="resumeBox"></div>
   <div class="seclist" id="seclist"></div>
@@ -520,7 +547,7 @@ function showHub(){
     const card=document.createElement('button');
     card.className='seccard';
     card.innerHTML=`<div class="sechead">
-        <span class="secname">화자 ${p.pid} · ${REGION_NAME[p.regionCode]||p.regionCode} · ${p.sex} · ${p.birthYear}년생</span>
+        <span class="secname">${shortId(p.speakerId)} · ${REGION_NAME[p.regionCode]||p.regionCode} · ${p.sex} · ${p.birthYear}년생</span>
         <span class="secnum">${cnt} / ${SCRIPT.length}${fr?` · 자유 ${fr}`:''}</span></div>`;
     card.addEventListener('click',()=>openProfile(p));
     list.appendChild(card);
@@ -542,6 +569,8 @@ function secDone(sec){ const s=doneMap(); return secItems(sec).filter(x=>s[x.id]
 
 function showSections(){
   document.getElementById('secLead').textContent = `${regionLabel()} · ${meta.sex} · ${meta.birthYear}년생 — 섹션을 고르세요.`;
+  document.getElementById('idShow').textContent = shortId(speakerId);
+  drawPay();
   drawPending();
   // 이어하기
   const st = jget(kLast(curPid), null);
@@ -798,6 +827,75 @@ document.getElementById('toSecFromFree').addEventListener('click',()=>{
   if(recording) stopFree();
   uploadPending().then(showSections);
 });
+
+/* ════ 화자 아이디 + 사례비 정보 (이번 주 한정) ════
+   - 아이디: speakerId 앞 두 덩어리(기기코드_번호). Drive 폴더명 앞부분과 같아 교차확인 키로 쓴다.
+   - 사례비 정보: Supabase 임시 테이블로만 전송. 기기(localStorage)에는 남기지 않고 "입력 완료" 표시만 저장.
+   - 테이블 RLS가 insert만 허용하므로 응답 본문을 받지 않는다(Prefer: return=minimal).          */
+const SB_URL   = 'https://xlrbsirplkrbkpmuylwk.supabase.co';
+const SB_ANON  = 'PASTE_SUPABASE_ANON_KEY_HERE';      // ← anon(또는 publishable) 키 붙여넣기
+const SB_TABLE = 'ign_l2u_qrecord';
+const kPay = pid => `l2u_payok_${pid}`;
+
+function shortId(sid){ return sid ? String(sid).split('_').slice(0,2).join('_') : ''; }
+
+document.getElementById('copyId').addEventListener('click', async ()=>{
+  const v = shortId(speakerId), b = document.getElementById('copyId');
+  try{ await navigator.clipboard.writeText(v); b.textContent='✓ 복사됨'; }
+  catch(e){
+    const r=document.createRange(); r.selectNodeContents(document.getElementById('idShow'));
+    const s=getSelection(); s.removeAllRanges(); s.addRange(r);
+    b.textContent='길게 눌러 복사하세요';
+  }
+  setTimeout(()=>{ b.textContent='아이디 복사'; }, 2000);
+});
+
+function drawPay(force){
+  const box = document.getElementById('payBox');
+  if(!force && curPid!=null && jget(kPay(curPid), false)){
+    box.innerHTML = `<div class="paydone"><span class="t">✓ 사례비 정보 입력 완료</span>
+      <button id="payAgain">다시 입력</button></div>`;
+    document.getElementById('payAgain').addEventListener('click', ()=>drawPay(true));
+    return;
+  }
+  box.innerHTML = `
+    <div class="p1">사례비 지급 정보</div>
+    <div class="p2">이름·계좌번호는 사례비 지급에만 쓰이며, 녹음과 별도로 보관되고 지급 후 파기됩니다.</div>
+    <input id="pName" class="txt" type="text" autocomplete="name" placeholder="이름">
+    <input id="pBank" class="txt" type="text" placeholder="은행 (예: 농협)">
+    <input id="pAcct" class="txt" type="text" inputmode="numeric" placeholder="계좌번호 (숫자만)">
+    <input id="pPrev" class="txt" type="text" placeholder="(선택) 다른 기기에서 쓰던 이전 아이디">
+    <button class="bigbtn" id="paySend" style="margin-top:4px;">사례비 정보 보내기</button>
+    <div class="paymsg" id="payMsg"></div>`;
+  document.getElementById('paySend').addEventListener('click', sendPay);
+}
+
+async function sendPay(){
+  const msg = document.getElementById('payMsg'), btn = document.getElementById('paySend');
+  const name = document.getElementById('pName').value.trim();
+  const bank = document.getElementById('pBank').value.trim();
+  const account = document.getElementById('pAcct').value.replace(/[^0-9]/g,'');
+  const prev = document.getElementById('pPrev').value.trim();
+  if(!name || !bank){ msg.style.color='var(--warn)'; msg.textContent='이름과 은행을 입력해 주세요.'; return; }
+  if(account.length<6 || account.length>20){ msg.style.color='var(--warn)'; msg.textContent='계좌번호를 숫자로 정확히 입력해 주세요.'; return; }
+  if(SB_ANON.startsWith('PASTE_')){ msg.style.color='var(--warn)'; msg.textContent='아직 접수 준비 중이에요. 담당자에게 문의해 주세요.'; return; }
+
+  btn.disabled=true; btn.textContent='보내는 중…'; msg.textContent='';
+  const headers = {'apikey':SB_ANON, 'Content-Type':'application/json', 'Prefer':'return=minimal'};
+  if(SB_ANON.startsWith('eyJ')) headers['Authorization'] = 'Bearer '+SB_ANON;   // 구형 JWT anon 키일 때만
+  try{
+    const res = await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`, {
+      method:'POST', headers,
+      body: JSON.stringify({speaker_id: shortId(speakerId), prev_ids: prev||null, name, bank, account})
+    });
+    if(!res.ok) throw new Error(res.status);
+    jset(kPay(curPid), true);            // 완료 표시만 저장 (개인정보는 저장 안 함)
+    drawPay();
+  }catch(e){
+    btn.disabled=false; btn.textContent='사례비 정보 보내기';
+    msg.style.color='var(--warn)'; msg.textContent=`전송에 실패했어요(${e.message}). 잠시 후 다시 시도해 주세요.`;
+  }
+}
 
 /* ════ 업로드 (GAS → Drive) ════ */
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbwyEZBn7g1h098IQSNqoph09F1laGDHT-1A3XJrjBTi9qSrXwKcophe0H5Y-xPNFR7r/exec';
