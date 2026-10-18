@@ -833,7 +833,7 @@ document.getElementById('toSecFromFree').addEventListener('click',()=>{
    - 사례비 정보: Supabase 임시 테이블로만 전송. 기기(localStorage)에는 남기지 않고 "입력 완료" 표시만 저장.
    - 테이블 RLS가 insert만 허용하므로 응답 본문을 받지 않는다(Prefer: return=minimal).          */
 const SB_URL   = 'https://xlrbsirplkrbkpmuylwk.supabase.co';
-const SB_ANON  = 'PASTE_SUPABASE_ANON_KEY_HERE';      // ← anon(또는 publishable) 키 붙여넣기
+const SB_ANON  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhscmJzaXJwbGtyYmtwbXV5bHdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4Njg2MDIsImV4cCI6MjA5NDQ0NDYwMn0.um8vLiRljnfOZ4vFIpIjWAz25g-38wxMfWi7m-V4ntk';
 const SB_TABLE = 'ign_l2u_qrecord';
 const kPay = pid => `l2u_payok_${pid}`;
 
