@@ -396,7 +396,8 @@ async function idbPut(pid,id,blob){
       tx.objectStore(DB_STORE).put({key:idbKey(pid,id), pid, id, blob, ts:Date.now()});
       tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
     });
-  }catch(e){ /* 영속 저장 실패해도 메모리 녹음은 그대로 살아 있음 */ }
+    return true;
+  }catch(e){ return false; }   // [패치] 실패를 호출부에 알림 (기존: 조용히 무시)
 }
 async function idbDel(pid,id){
   try{
@@ -461,9 +462,7 @@ function deviceId(){
 /* 현재 프로필 낭독 진행률·위치 저장 (자유 발화는 kFree로 따로 관리) */
 function persist(){
   if(curPid==null) return;
-  const done = jget(kDone(curPid), {});
-  Object.keys(takes).forEach(id=>{ if(!id.startsWith('FREE_')) done[id]=true; });
-  jset(kDone(curPid), done);
+  // [패치] ✓(done)는 여기서 찍지 않음 → 서버 저장 확인 시 uploadPending에서만 찍는다
   if(curSec) jset(kLast(curPid), {sec:curSec, idx});
 }
 function doneMap(){ return curPid!=null ? jget(kDone(curPid), {}) : {}; }
@@ -644,24 +643,37 @@ function render(){
   });
   document.getElementById('count').textContent=`${idx+1}/${items.length}`;
   document.getElementById('progbar').style.width=((idx+1)/items.length*100)+'%';
-  const has=!!takes[it.id] || !!doneMap()[it.id];
   document.getElementById('play').disabled=!takes[it.id];
   document.getElementById('redo').disabled=!takes[it.id];
-  document.getElementById('saved').textContent = has?'✓ 녹음됨':'';
+  document.getElementById('saved').textContent = savedLabel(it.id);
   document.getElementById('prev').disabled = idx===0;
   document.getElementById('next').textContent = idx===items.length-1 ? '완료 →' : '다음 →';
   resetRecBtn(); document.getElementById('timer').textContent='';
 }
 
-document.getElementById('prev').addEventListener('click',()=>{ if(idx>0){idx--; persist(); render();} });
+/* [패치] 저장 상태 표시: 서버 확인 전/후 구분 */
+function savedLabel(id){
+  if(doneMap()[id] && !takes[id]) return '✓ 저장됨';
+  if(takes[id]) return '녹음됨 · 전송 중…';
+  return '';
+}
+/* [패치] 섹션 끝 이중 확인: 남은 녹음 재전송 후에도 남으면 알림 */
+async function finishSection(){
+  const left = await uploadPending();
+  if(left>0) alert(`아직 서버로 보내지 못한 녹음이 ${left}건 있어요.\n인터넷 연결을 확인하시고, 페이지를 닫지 말고 '다시 보내기'를 눌러 주세요.`);
+  showSections();
+}
+document.getElementById('prev').addEventListener('click',()=>{ if(recording) stopRec(); if(idx>0){idx--; persist(); render();} });
 document.getElementById('next').addEventListener('click',()=>{
+  if(recording) stopRec();         // [패치] 녹음 중 넘기면 현재 문장으로 저장 후 이동
   const items=secItems(curSec);
-  persist();                       // 다음 누를 때마다 저장
+  persist();
   if(idx<items.length-1){ idx++; render(); }
-  else { uploadPending().then(showSections); }   // 섹션 끝 → 업로드 후 선택으로
+  else { finishSection(); }        // 섹션 끝 → 이중 확인
 });
 document.getElementById('toSecFromRec').addEventListener('click',()=>{
-  persist(); uploadPending().then(showSections);
+  if(recording) stopRec();
+  persist(); finishSection();
 });
 
 /* ════ 녹음 엔진 (Web Audio → WAV, iOS Safari 대응) ════
@@ -674,7 +686,14 @@ let recording=false, chunks=[], sr=44100, tStart=0, tInt;
 let micReady=false;
 
 async function ensureMic(){
-  if(micReady) return true;
+  if(micReady){
+    // [패치] 다른 앱에 다녀오면 마이크 트랙이 끊길 수 있음 → 살아 있으면 재사용, 아니면 다시 잡음
+    const t = stream && stream.getAudioTracks()[0];
+    if(t && t.readyState==='live' && !t.muted) return true;
+    try{ src.disconnect(); proc.disconnect(); }catch(e){}
+    try{ stream.getTracks().forEach(x=>x.stop()); }catch(e){}
+    micReady=false;
+  }
   // AudioContext: iOS는 webkit 접두 + 탭 안에서 생성/resume 해야 함
   audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
   if(audioCtx.state==='suspended'){ try{ await audioCtx.resume(); }catch(e){} }
@@ -729,11 +748,15 @@ function stopRec(){
   const blob=encodeWAV(flat,sr); const it=secItems(curSec)[idx];
   if(takes[it.id] && takes[it.id].url) URL.revokeObjectURL(takes[it.id].url);
   takes[it.id]={blob,url:URL.createObjectURL(blob)};
-  idbPut(curPid, it.id, blob);               // 원본 영속 보관
   resetRecBtn();
   document.getElementById('play').disabled=false; document.getElementById('redo').disabled=false;
-  document.getElementById('saved').textContent='✓ 녹음됨';
+  document.getElementById('saved').textContent='녹음됨 · 전송 중…';
   persist();
+  // [패치] 기기 저장 실패 시 경고 + 즉시 전송
+  idbPut(curPid, it.id, blob).then(ok=>{
+    if(!ok) document.getElementById('saved').textContent='⚠ 기기 저장 실패 · 전송이 끝날 때까지 페이지를 닫지 마세요';
+  });
+  uploadPending();
 }
 function resetRecBtn(){ const b=document.getElementById('recbtn'); b.classList.remove('recording'); document.getElementById('reclabel').textContent='녹음'; }
 document.getElementById('recbtn').addEventListener('click',()=> recording?stopRec():startRec());
@@ -816,11 +839,12 @@ function stopFree(){
   const id=`FREE_${String(list.length+1).padStart(3,'0')}`;
   const blob=encodeWAV(flat,sr);
   takes[id]={blob, url:URL.createObjectURL(blob)};
-  idbPut(curPid, id, blob);                  // 원본 영속 보관
   list.push({id, dur, up:false});
   saveFreeList(list);
   drawTiles();
-  setFreeMsg('✓ 저장됨 · 섹션 선택으로 나가면 업로드됩니다');
+  setFreeMsg('녹음됨 · 전송 중…');
+  idbPut(curPid, id, blob).then(ok=>{ if(!ok) setFreeMsg('⚠ 기기 저장 실패 · 전송이 끝날 때까지 페이지를 닫지 마세요'); });
+  uploadPending().then(()=>{ if(document.getElementById('pgFree').classList.contains('on')) drawTiles(); });   // [패치] 즉시 전송
 }
 
 document.getElementById('toSecFromFree').addEventListener('click',()=>{
@@ -833,7 +857,7 @@ document.getElementById('toSecFromFree').addEventListener('click',()=>{
    - 사례비 정보: Supabase 임시 테이블로만 전송. 기기(localStorage)에는 남기지 않고 "입력 완료" 표시만 저장.
    - 테이블 RLS가 insert만 허용하므로 응답 본문을 받지 않는다(Prefer: return=minimal).          */
 const SB_URL   = 'https://xlrbsirplkrbkpmuylwk.supabase.co';
-const SB_ANON  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhscmJzaXJwbGtyYmtwbXV5bHdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4Njg2MDIsImV4cCI6MjA5NDQ0NDYwMn0.um8vLiRljnfOZ4vFIpIjWAz25g-38wxMfWi7m-V4ntk';
+const SB_ANON  = 'PASTE_SUPABASE_ANON_KEY_HERE';      // ← anon(또는 publishable) 키 붙여넣기
 const SB_TABLE = 'ign_l2u_qrecord';
 const kPay = pid => `l2u_payok_${pid}`;
 
@@ -930,27 +954,49 @@ async function uploadOne(id){
   return data && data.ok === true;           // 서버가 저장 성공을 확인한 경우만 true
 }
 
-let uploading=false;
-async function uploadPending(){
-  if(uploading) return;                      // 중복 실행 방지(뒤로가기 연타 등)
-  if(GAS_URL.startsWith('PASTE_')) return;   // 아직 URL 미설정이면 스킵(로컬 테스트)
+/* [패치] 즉시 전송 대응
+   - 전송 중에 새 녹음이 들어오면 끝난 뒤 한 바퀴 더 돈다(uploadAgain)
+   - 서버 저장 확인(ok) 시에만 ✓(done) 기록
+   - 전송 중 같은 문장을 다시 녹음했으면 새 녹음은 지우지 않는다(같은 객체일 때만 삭제)
+   - 반환값: 이 화자의 미전송 건수 (섹션 끝 이중 확인용)                         */
+let uploading=false, uploadAgain=false, uploadRun=null;
+function uploadPending(){
+  if(uploading){ uploadAgain=true; return uploadRun; }
+  if(GAS_URL.startsWith('PASTE_')) return Promise.resolve(Object.keys(takes).length);
   uploading=true;
   const pid=curPid;
-  try{
-    for(const id of Object.keys(takes)){
-      try{
-        const ok=await uploadOne(id);
-        if(!ok) continue;                    // 실패분은 takes·IndexedDB에 남겨 재시도
-        if(id.startsWith('FREE_')){          // 자유 발화: 목록에 업로드 완료 표시
-          const list=freeList(); const f=list.find(x=>x.id===id);
-          if(f){ f.up=true; saveFreeList(list); }
+  uploadRun = (async ()=>{
+    try{
+      do{
+        uploadAgain=false;
+        for(const id of Object.keys(takes)){
+          const t=takes[id]; if(!t) continue;
+          try{
+            const ok=await uploadOne(id);
+            if(!ok) continue;                  // 실패분은 takes·IndexedDB에 남겨 재시도
+            if(id.startsWith('FREE_')){
+              const list=freeList(); const f=list.find(x=>x.id===id);
+              if(f){ f.up=true; saveFreeList(list); }
+            }else{
+              const d=jget(kDone(pid),{}); d[id]=true; jset(kDone(pid),d);   // ✓는 여기서만
+            }
+            if(takes[id]===t){                 // 그사이 다시 녹음하지 않았을 때만 정리
+              await idbDel(pid, id);
+              if(t.url) URL.revokeObjectURL(t.url);
+              delete takes[id];
+            }else{ uploadAgain=true; }         // 새 녹음은 다음 바퀴에 전송
+            if(curSec && document.getElementById('pgRec').classList.contains('on')){
+              const cur=secItems(curSec)[idx];
+              if(cur && cur.id===id) document.getElementById('saved').textContent=savedLabel(id);
+            }
+          }catch(e){ /* 개별 실패는 무시하고 다음 건으로 */ }
         }
-        await idbDel(pid, id);               // 서버 저장 확인 후에만 영속본 삭제
-        if(takes[id]){ if(takes[id].url) URL.revokeObjectURL(takes[id].url); delete takes[id]; }
-      }catch(e){ /* 개별 실패는 무시하고 다음 건으로 */ }
-    }
-  } finally { uploading=false; }
-  persist();
+      }while(uploadAgain);
+    } finally { uploading=false; }
+    persist();
+    return Object.keys(takes).length;
+  })();
+  return uploadRun;
 }
 
 /* ════ 부팅: 대본 로드 → 프로필 허브 ════ */
