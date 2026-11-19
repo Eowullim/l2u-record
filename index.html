@@ -686,7 +686,7 @@ document.getElementById('freeCard').addEventListener('click', showFree);
    - 현재 프로필에 consentV2가 없으면 showSections() 대신 팝업을 띄운다.
    - 동의 시 프로필 객체에 {ver, at, open}을 넣어 l2u_profiles_v1에 저장.
    - 동의하지 않음 → 허브로. 섹션 화면에는 들어갈 수 없다.                    */
-const CONSENT_VER = '2026-11-19';
+const CONSENT_VER = 'v2';
 function curProfile(){ return loadProfiles().find(p=>p.pid===curPid) || null; }
 function needConsent(){ const p=curProfile(); return !(p && p.consentV2); }
 
